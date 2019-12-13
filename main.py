@@ -26,8 +26,8 @@ def main():
     model = Model(log_path, saver_dir, date, gpu_index, note)
     model.build(reuse=False)
 
-    print('--- Train Model ---')
-    model.train(read_ckpt=read_ckpt)
+    # print('--- Train Model ---')
+    # model.train(read_ckpt=read_ckpt)
 
     print( '--- Test Model ---' )
     model.test()

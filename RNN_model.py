@@ -36,15 +36,15 @@ class Model:
         self.near_frames = 0
         #self.neural_number = 256
         #self.input_dimension = (self.near_frames*2+1)*257
-        self.input_dimension = 257
-        self.time_step = 50
+        self.input_dimension = 40
+        self.time_step = 100
         self.lstm_neural_number = 256
         self.neural_number = self.lstm_neural_number*2
         self.output_dimension = 30
-        self.init_learning_rate = 1e-3
-        self.audio_batch = 120
+        self.init_learning_rate = 2e-3
+        self.audio_batch = 128
         self.thread_num = 4
-        self.batch_size = 40
+        self.batch_size = 32
         self.shuffle_data_time = 2
 
 
@@ -55,25 +55,37 @@ class Model:
 
     def _add_2dfc_layer(self, input_, neural_number, output_number, activate_function, layer_num):
         with tf.name_scope( "fc_layer_" + layer_num):
-            w = tf.get_variable("W_"+layer_num, shape=[neural_number, output_number], initializer=tf.random_normal_initializer())
+            w = tf.get_variable("W_"+layer_num, shape=[neural_number, output_number], initializer=tf.contrib.layers.xavier_initializer() )
             b = tf.get_variable("B_"+layer_num, shape=[1, output_number], initializer=tf.constant_initializer( value=0, dtype=tf.float32))
             output = activate_function(tf.add(tf.matmul(input_, w), b))
         return output
 
-    def _add_bidir_lstm(self, input, lstm_hidden_size, layer_num):
-        with tf.name_scope( "bidir_LSTM_layer_" + str(layer_num) ):
-            encoder_f_cell = LSTMCell( lstm_hidden_size )
-            encoder_b_cell = LSTMCell( lstm_hidden_size )
+    def _add_bidir_lstm(self, input_, lstm_hidden_size, layer_num):
+        with tf.name_scope( "bidir_LSTM_layer_" + layer_num ):
+            encoder_f_cell = tf.nn.rnn_cell.LSTMCell( num_units=lstm_hidden_size )
+            encoder_b_cell = tf.nn.rnn_cell.LSTMCell( num_units=lstm_hidden_size )
+            # c_state = tf.zeros( shape=(self.config.batch_size, neural_number) )
+            # h_state = tf.zeros( shape=(self.config.batch_size, neural_number) )
+            # init_state = LSTMStateTuple( c_state, h_state )
             (encoder_fw_outputs, encoder_bw_outputs), (encoder_fw_final_state, encoder_bw_final_state) = \
                 tf.nn.bidirectional_dynamic_rnn( cell_fw=encoder_f_cell,
                                                  cell_bw=encoder_b_cell,
-                                                 inputs=input,
-                                                 dtype=tf.float32)
-            # input has shape [batch, time, feature_dim] (default time major == False)
-            fw_output = tf.nn.embedding_lookup(tf.transpose( encoder_fw_outputs, [1, 0, 2] ), self.time_step-1)
-            bw_output = tf.nn.embedding_lookup(tf.transpose( encoder_bw_outputs, [1, 0, 2] ), self.time_step-1)
-            encoder_outputs = tf.concat( (fw_output, bw_output), 1 )
-        return encoder_outputs
+                                                 inputs=input_,
+                                                 dtype=tf.float32,
+                                                 time_major=False
+                                                 )
+            # fw_output = tf.transpose( encoder_fw_outputs, [1, 0, 2] )
+            # bw_output = tf.transpose( encoder_bw_outputs, [1, 0, 2] )
+            outputs = tf.concat( (encoder_fw_outputs, encoder_bw_outputs), 2 )
+        return outputs
+
+    def _add_lstm(self, input_, lstm_hidden_size, proj, layer_num):
+        with tf.variable_scope( "lstm_layer_" + layer_num ):
+            lstm_cell = tf.nn.rnn_cell.LSTMCell( num_units=lstm_hidden_size, num_proj=proj, activation=tf.nn.softmax )
+
+            outputs, _ = tf.nn.dynamic_rnn( cell=lstm_cell, inputs=input_, dtype=tf.float32,
+                                            time_major=False )  # for TI-VS must use dynamic rnn
+        return outputs
 
     def build(self, reuse):
 
@@ -83,6 +95,7 @@ class Model:
 
             with tf.variable_scope( 'Intputs' ):
                 self.x_noisy = tf.placeholder(
+                    #tf.float32, shape=[None, self.time_step, self.input_dimension], name='x' )
                     tf.float32, shape=[None, self.time_step, self.input_dimension], name='x' )
                 self.lr = tf.placeholder( dtype=tf.float32 )  # learning rate
 
@@ -91,15 +104,15 @@ class Model:
                     tf.float32, shape=[None, self.output_dimension], name='y_clean' )
 
             with tf.variable_scope( 'RNN' ):
-                layer_1 = self._add_bidir_lstm( self.x_noisy, self.lstm_neural_number, '1')
+                layer_1 = self._add_bidir_lstm( self.x_noisy, self.lstm_neural_number, "layer_1" )
+                outputs = self._add_lstm( layer_1, self.lstm_neural_number, self.output_dimension, "layer_2" )
+                self.output_layer = tf.reduce_mean( outputs, axis=1 )
+                #print(layer_1)
 
                 #flatten_layer1 = tf.layers.Flatten()(layer_1)
 
-                layer_2 = self._add_2dfc_layer(layer_1, self.neural_number, self.neural_number, tf.nn.sigmoid, "2")
-                layer_3 = self._add_bidir_lstm(layer_2, self.lstm_neural_number, '3')
-                layer_4 = self._add_2dfc_layer(layer_3, self.neural_number, self.neural_number, tf.nn.sigmoid, "4")
-
-                self.output_layer = self._add_2dfc_layer(layer_2, self.neural_number, self.output_dimension, tf.nn.softmax, "5")
+                #layer_2 = self._add_2dfc_layer(layer_1, self.lstm_neural_number, 128, tf.nn.leaky_relu, "2")
+                #self.output_layer = self._add_2dfc_layer(layer_2, 128, self.output_dimension, tf.nn.softmax, "3")
 
             with tf.name_scope( 'reg_loss' ):
                 self.loss_reg = tf.losses.softmax_cross_entropy(
@@ -113,7 +126,7 @@ class Model:
                 optimizer = tf.train.AdamOptimizer( self.lr )
                 #optimizer = tf.train.GradientDescentOptimizer( self.lr )
                 gradients_1, v_1 = zip( *optimizer.compute_gradients( self.loss_reg ) )
-                gradients_1, _ = tf.clip_by_global_norm( gradients_1, 0.5 )
+                #gradients_1, _ = tf.clip_by_global_norm( gradients_1, 0.5 )
                 self.optimizer_1 = optimizer.apply_gradients( zip( gradients_1, v_1 ),
                                                               global_step=self.global_step )
             self.saver = tf.train.Saver()
@@ -122,7 +135,7 @@ class Model:
                           train=True):
 
         loss_reg_tmp = 0.
-        count = 0
+        count = 0.
         audio_len = len( data_list )
         noise_len = len( noise_list )
         learning_rate = self.init_learning_rate
@@ -132,7 +145,6 @@ class Model:
             data_list, audio_batch_size, audio_len )
 
         noise_index = 0
-
         for audio_iteration in tqdm( range( int( audio_len / audio_batch_size ) ) ):
             audio_batch = next( get_audio_batch )
 
@@ -164,7 +176,6 @@ class Model:
             clean_data, noisy_data = shuffle( clean_data, noisy_data)
 
             data_len = len( clean_data )
-
             for data_index in range(0, data_len, self.batch_size):
                 assert data_len % self.batch_size == 0, 'Make Sure Data Size is Divisible by Batch Size'
                 noisy_batch = noisy_data[data_index:data_index + self.batch_size]
@@ -191,20 +202,25 @@ class Model:
             tf.gfile.DeleteRecursively( self.tb_dir )
             tf.gfile.MkDir( self.tb_dir )
 
-        voice_path = r"C:\Project\Python\AISound\dataset\trainset\*\*.wav"
+        voice_path = r"C:\Project\Python\AISound\dataset\trainset\*\*"
         if self.output_dimension == 2:
-            voice_path = r"C:\Project\Python\AISound\dataset\subset\*\*.wav"
-        noise_path = r"C:\Project\Python\AISound\dataset\noise\*.wav"
-        dev_voice_path = r"C:\Project\Python\AISound\dataset\testset\*\*.wav"
+            voice_path = r"C:\Project\Python\AISound\dataset\subset\*\*"
+        noise_path = r"C:\Project\Python\AISound\dataset\noise\*"
+        dev_voice_path = r"C:\Project\Python\AISound\dataset\testset\*"
         if self.output_dimension == 2:
-            dev_voice_path = r"C:\Project\Python\AISound\dataset\subset\*\*.wavv"
-        dev_noise_path = r"C:\Project\Python\AISound\dataset\noise\*.wav"
+            dev_voice_path = r"C:\Project\Python\AISound\dataset\subset\*\*"
+        dev_noise_path = r"C:\Project\Python\AISound\dataset\noise\*"
 
         data_list = [tag for tag in iglob( voice_path )]
         noise_list = [tag for tag in iglob( noise_path )]
         noise_list = np.random.choice(noise_list, len(data_list))
 
-        dev_data_list = [tag for tag in iglob( dev_voice_path )]
+        dev_speaker_list = [tag for tag in iglob( dev_voice_path )]
+        dev_data_list = []
+        for file in dev_speaker_list:
+            data_list_tmp = [tag for tag in iglob( file+'\\*' )]
+            dev_data_list.append(data_list_tmp[:5])
+        dev_data_list = np.reshape(dev_data_list, [-1])
         dev_noise_list = [tag for tag in iglob( dev_noise_path )]
         dev_noise_list = np.random.choice(dev_noise_list, len(dev_data_list))
 
@@ -216,18 +232,18 @@ class Model:
         speaker_list = []
         for data in data_list:
             speaker = data.split('\\')[-2][:3]
-            print('data=', data,', speaker=', speaker)
+            #print('data=', data,', speaker=', speaker)
             if speaker not in speaker_list:
                 speaker_list.append(speaker)
 
         with tf.Session() as sess:
 
             print( 'Start Training' )
-            patience = self.eStopStep
+            patience = 8
             FLAG = True
-            min_delta = 0.0001
+            min_delta = 0.001
             step = 0
-            epochs = 11
+            epochs = 20
             epochs = range( epochs )
 
             tf.global_variables_initializer().run()
@@ -251,7 +267,6 @@ class Model:
                 if epoch % self.shuffle_data_time == 0:
                     data_list = shuffle( data_list )
                     noise_list = shuffle( noise_list )
-
                 loss_reg, summary, step = self._training_process( sess, epoch, data_list,
                                                                   noise_list, snr_list, speaker_list, merge_op,
                                                                   step )
@@ -268,7 +283,6 @@ class Model:
                         int( epoch ), loss_reg ) )
                     print( '[epoch {}] Loss Dev:{}'.format(
                         int( epoch ), loss_dev ) )
-                    self.saver.save( sess=sess, save_path=self.saver_name )
                 else:
                     print( '[epoch {}] Loss reg:{}'.format(
                         int( epoch ), loss_reg ) )
@@ -278,7 +292,7 @@ class Model:
                     if loss_dev <= (best_dev_loss - min_delta):
                         best_dev_loss = loss_dev
                         self.saver.save( sess=sess, save_path=self.saver_name )
-                        patience = self.eStopStep
+                        patience = 10
                         print( 'Best Reg Loss: ', best_dev_loss )
                     else:
                         print( 'Not improve Loss:', best_dev_loss )
@@ -290,17 +304,31 @@ class Model:
 
     def test(self):
 
-        voice_path = r"C:\Project\Python\AISound\dataset\testset2\*\*.wav"
+        voice_path = r"C:\Project\Python\AISound\dataset\testset2\*"
         if self.output_dimension == 2:
-            voice_path = r"C:\Project\Python\AISound\dataset\subset\*\*.wav"
-        noise_path = r"C:\Project\Python\AISound\dataset\noise\*.wav"
+            voice_path = r"C:\Project\Python\AISound\dataset\subset\*\*"
+        noise_path = r"C:\Project\Python\AISound\dataset\noise\*"
 
-        data_list = [tag for tag in iglob( voice_path )]
-        noise_list = [tag for tag in iglob( noise_path )]
-        noise_list = np.random.choice( noise_list, len( data_list ) )
+        test_speaker_list = [tag for tag in iglob( voice_path )]
+        test_data_list = []
+        for file in test_speaker_list:
+            data_list_tmp = [tag for tag in iglob( file + '\\*' )]
+            test_data_list.append( data_list_tmp[:5] )
+        test_data_list = np.reshape( test_data_list, [-1] )
+
+        #noise_list = [tag for tag in iglob( noise_path )]
+        #noise_list = np.random.choice( noise_list, len( data_list ) )
 
         snr_list = ['10dB']
 
+        # speaker_list = []
+        # for data in test_speaker_list:
+        #     speaker = data.split( '/' )[-1][:3]
+        #     if speaker not in speaker_list:
+        #         speaker_list.append( speaker )
+
+        voice_path = r"C:\Project\Python\AISound\dataset\testset2\*\*"
+        data_list = [tag for tag in iglob( voice_path )]
         speaker_list = []
         for data in data_list:
             speaker = data.split( '\\' )[-2][:3]
@@ -322,11 +350,11 @@ class Model:
                     print( "mag model not found" )
 
             error_count = 0
-            for data in data_list:
+            for data in test_data_list:
                 y, _ = librosa.load( data, 16000, mono=True )
-                y -= np.mean( y )
+                y -= np.mean( np.abs(y) )
                 spec = wav2spec( y, 512, forward_backward_frame=self.near_frames , model='RNN')
-                spec = spec.reshape(1, 50, 257)
+                spec = np.reshape(spec, [1, -1, 40])
                 feed_dict = {self.x_noisy: spec}
                 output = sess.run(
                         [self.output_layer], feed_dict=feed_dict )
@@ -341,5 +369,5 @@ class Model:
                     print( 'predicr speaker : {}\n'.format( predict_speaker ) )
                     error_count +=1
 
-            print( 'test total number : {}'.format( len(data_list) ) )
+            print( 'test total number : {}'.format( len(test_data_list) ) )
             print( 'predict error number : {}'.format( error_count ) )

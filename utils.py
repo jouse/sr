@@ -173,14 +173,25 @@ def copy_file(input_file, output_file):
     copy2(input_file, output_file)
 
 def wav2spec(y, window_size, forward_backward_frame=0, model=None):
-    D = librosa.stft( y,
-                      n_fft=window_size,
-                      hop_length=window_size,
-                      win_length=window_size,
-                      window=scipy.signal.hann )
 
-    D = D + epsilon
-    Sxx = np.log10( abs( D ) ** 2 )
+    if len(y)<100*0.032*16000:
+        y_tmp = np.zeros([int(100*0.032*16000)])
+        y_tmp[int(100*0.032*16000)-len(y):] = y
+        y = y_tmp
+
+    y_mfcc = librosa.feature.mfcc( y=y, sr=16000, n_mfcc=40, n_fft=512, hop_length=256 )
+    #y_melspec = librosa.feature.melspectrogram(y, 16000, n_fft=512, hop_length=256)
+    Sxx = y_mfcc
+
+    # D = librosa.stft( y,
+    #                   n_fft=window_size,
+    #                   hop_length=int(window_size/2),
+    #                   win_length=window_size,
+    #                   window=scipy.signal.hann )
+
+    #D = D + epsilon   # shape = (257, frames)
+    #D.shape
+    #Sxx = np.log10( abs( D ) ** 2 )
 
     if model == 'CNN':
         Sxx_r = Sxx.T # shape = (frames, 257)
@@ -191,16 +202,16 @@ def wav2spec(y, window_size, forward_backward_frame=0, model=None):
         return Sxx_r.T.reshape( [feature_dim, frames, 1] )
     elif model == 'RNN':
         Sxx_r = Sxx.T  # shape = (frames, 257)
-        frame_start_index = np.random.randint( 0, len( Sxx_r ) - 50 )
-        frame_end_index = frame_start_index + 50
+        frame_start_index = np.random.randint( 0, len( Sxx_r ) - 100 )
+        frame_end_index = frame_start_index + 100
         Sxx_r = Sxx_r[frame_start_index:frame_end_index]
         return Sxx_r
-    if forward_backward_frame:
+    elif forward_backward_frame:
         NUM_FRAME = forward_backward_frame
         NUM_FFT = 512
         Sxx_r = Sxx.T
         return_data = np.empty(
-            (1000, np.int32( NUM_FRAME * 2 ) + 1, np.int32( NUM_FFT / 2 ) + 1) )
+            (100000, np.int32( NUM_FRAME * 2 ) + 1, np.int32( NUM_FFT / 2 ) + 1) )
         frames, dim = Sxx_r.shape
 
         idx = 0
@@ -221,7 +232,7 @@ def wav2spec(y, window_size, forward_backward_frame=0, model=None):
     else:
         return Sxx
 
-def _gen_training_data_runtime(clean_file_list, noise_file_list, snr_list, label, near_frames, model='RNN', num=None):
+def _gen_training_data_runtime(clean_file_list, noise_file_list, snr_list, label, near_frames, model=None, num=None):
 
     random_snr = random.randint(0, len(snr_list)-1)
     target_SNR = snr_list[random_snr]
@@ -232,14 +243,9 @@ def _gen_training_data_runtime(clean_file_list, noise_file_list, snr_list, label
     ## load clean & noise data and mix
     clean_sr = 16000
     noise_sr = 16000
-    try:
-        y_clean, _ = librosa.load( clean_file, clean_sr, mono=True )
-        while len(y_clean)<int(0.16*16000*60):
-            rand_ind = np.random.randint(0 ,len(clean_file))
-            y_clean, _ = librosa.load(clean_file_list[rand_ind], clean_sr, mono=True)
-    except:
-        print(clean_file)
+    y_clean, _ = librosa.load( clean_file, clean_sr, mono=True )
     y_clean -= np.mean( y_clean )
+    #y_clean /= np.max(np.abs(y_clean))
     clean_pwr = sum( abs( y_clean ) ** 2 ) / len( y_clean )
     y_noise, _ = librosa.load( noise_file, noise_sr, mono=True )
 
@@ -253,7 +259,7 @@ def _gen_training_data_runtime(clean_file_list, noise_file_list, snr_list, label
     y_noise = y_noise - np.mean( y_noise )
     noise_variance = clean_pwr / (10 ** (SNR / 10))
     noise = np.sqrt( noise_variance ) * y_noise / np.std( y_noise )
-    y_noisy = y_clean + noise
+    y_noisy = y_clean
     y_noisy = y_noisy / np.max( np.abs( y_noisy ) )
 
     ## turn wav to specturn

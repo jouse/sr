@@ -209,7 +209,7 @@ class Model:
         noise_path = r"C:\Project\Python\AISound\dataset\noise\*"
         dev_voice_path = r"C:\Project\Python\AISound\dataset\testset\*"
         if self.output_dimension == 2:
-            dev_voice_path = r"C:\Project\Python\AISound\dataset\subset\*"
+            dev_voice_path = r"C:\Project\Python\AISound\dataset\subset\*\*"
         dev_noise_path = r"C:\Project\Python\AISound\dataset\noise\*"
 
         data_list = [tag for tag in iglob( voice_path )]

@@ -10,9 +10,9 @@ from os.path import join
 import xlrd
 import random
 
-#import matplotlib
-#matplotlib.use('TkAgg')
-#import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
+from scipy import signal
+from scipy.io import wavfile
 
 epsilon = np.finfo(float).eps
 
@@ -272,3 +272,12 @@ def _gen_training_data_runtime(clean_file_list, noise_file_list, snr_list, label
     return noisy_spec, clean_label.reshape( [1, len(label)] )
 
 
+def Wav2Spectrogram(wavfile):
+    sample_rate, samples = wavfile.read(wavfile)
+    frequencies, times, spectrogram = signal.spectrogram(samples, sample_rate)
+
+    plt.pcolormesh(times, frequencies, spectrogram)
+    plt.imshow(spectrogram)
+    plt.ylabel('Frequency [Hz]')
+    plt.xlabel('Time [sec]')
+    plt.show()

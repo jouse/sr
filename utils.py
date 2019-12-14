@@ -13,7 +13,8 @@ import random
 import matplotlib.pyplot as plt
 from scipy import signal
 from scipy.io import wavfile
-
+import warnings
+warnings.filterwarnings("ignore")
 epsilon = np.finfo(float).eps
 
 def np_batch(data1, batch_size, data_len):

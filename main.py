@@ -1,12 +1,12 @@
 import tensorflow as tf
 import numpy as np
 
-from RNN_model import Model
+from Alan_model import Model
 from os.path import join
 from utils import search_wav
 from sklearn.cross_validation import train_test_split
 import warnings
-warnings.filterwarnings("ignore", category=DeprecationWarning)
+warnings.filterwarnings("ignore")
 
 #np.random.seed(1234567)
 
@@ -17,7 +17,7 @@ def main():
     # ===========================================================
     print('--- Build Model ---')
     note = 'verification'
-    date = '0708RNN30'
+    date = 'RNN30'
     gpu_index = '0'
     log_path = '.\\logs\\'
     saver_dir = '.\\model\\'

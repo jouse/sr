@@ -16,7 +16,7 @@ import random
 import librosa
 import warnings
 import utils
-warnings.filterwarnings("ignore", category=DeprecationWarning)
+warnings.filterwarnings("ignore")
 np.random.seed(10)
 
 class Model:

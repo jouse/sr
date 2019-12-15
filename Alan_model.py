@@ -15,15 +15,17 @@ class Model:
     def __init__(self, log_path, saver_path, date, gpu_num, note):
         self.root_path = 'C:\\Project\\Python\\'
         #self.model_name = 'digital_resnet18'
-        self.model_name = 'sr30_resnet18'
-        if "sr30_resnet18" in self.model_name:
-            self.AUDIO_DIR = Path(self.root_path + 'AISound\\dataSetForFastai')
-            self.IMG_DIR = Path(self.root_path + 'sr\\imgForSr30Train')
-            self.digit_pattern = r'([A-Za-z0-9]+)_\w+..png$'
-        else:
+        #self.model_name = 'sr30_resnet18'
+        #self.model_name = 'sr30_resnet34'
+        self.model_name = 'sr30_resnet50'
+        if "digital_resnet18" in self.model_name:
             self.AUDIO_DIR = Path(self.root_path + 'AISound\\free-spoken-digit-dataset-master\\recordings')
             self.IMG_DIR = Path(self.root_path + 'sr\\imgs1')
             self.digit_pattern = r'(\d+)_\w+_\d+.png$'
+        else:
+            self.AUDIO_DIR = Path(self.root_path + 'AISound\\dataSetForFastai')
+            self.IMG_DIR = Path(self.root_path + 'sr\\imgForSr30Train')
+            self.digit_pattern = r'([A-Za-z0-9]+)_\w+..png$'
         self.model_path = self.root_path + 'sr\\model\\fastai\\' + self.model_name + '\\'
         self.data = []
         os.makedirs(self.model_path, exist_ok=True)
@@ -64,6 +66,7 @@ class Model:
                 .label_from_re(self.digit_pattern)
                 .transform(size=(128, 64))
                 .databunch())
+        data.normalize()
         return data
 
     def log_mel_spec_tfm(self, fname, src_path, dst_path):
@@ -95,11 +98,12 @@ class Model:
     def train(self, read_ckpt=None):
         learn = cnn_learner(self.data, models.resnet18, metrics=accuracy) #.load(self.model_path + self.model_name)
         print('learn.path=', learn.path)
-        learn.lr_find()
-        learn.recorder.plot()
         learn.fit_one_cycle(12)
         learn.recorder.plot_losses()
         learn.unfreeze()
+        learn.lr_find()
+        fig = learn.recorder.plot(return_fig=True)
+        fig.savefig(self.model_path + 'lr_find.jpg', dpi=1000, bbox_inches='tight')
         learn.fit_one_cycle(12)
         learn.save(self.model_path + self.model_name)
         learn.export(file=self.model_path + self.model_name + '.pkl')
@@ -108,17 +112,17 @@ class Model:
         interp = ClassificationInterpretation(learn, preds, y, losses)
         #interp = ClassificationInterpretation.from_learner(learn)
         fig = interp.plot_confusion_matrix(figsize=(10, 10), dpi=60, return_fig=True)
-        fig.savefig(self.model_path + 'confusion_matrix.jpg', dpi=1000, bbox_inches='tight', return_fig=True)
+        fig.savefig(self.model_path + 'confusion_matrix.jpg', dpi=1000, bbox_inches='tight')
         fig = interp.plot_top_losses(9, figsize=(10, 10), return_fig=True)
         fig.savefig(self.model_path + 'top_losses.jpg', dpi=1000, bbox_inches='tight')
 
     def test(self):
-        if "sr30_resnet18" in self.model_name:
-            AUDIO_TEST_DIR = Path(self.root_path + 'AISound\\dataSetForFastaiTest')
-            IMG_TEST_DIR = Path(self.root_path + 'sr\\imgForSr30Test')
-        else:
+        if "digital_resnet18" in self.model_name:
             AUDIO_TEST_DIR = Path(self.root_path + 'AISound\\free-spoken-digit-dataset-master\\recordings')
             IMG_TEST_DIR = Path(self.root_path + 'sr\\imgs1')
+        else:
+            AUDIO_TEST_DIR = Path(self.root_path + 'AISound\\dataSetForFastaiTest')
+            IMG_TEST_DIR = Path(self.root_path + 'sr\\imgForSr30Test')
         testdata = self.GetDataWithAudio2Image(AUDIO_TEST_DIR, IMG_TEST_DIR)
         print('testdata=', testdata)
         learn = load_learner(path=self.model_path, file=self.model_name + '.pkl')

@@ -8,6 +8,7 @@ import numpy as np
 from utils_alan import read_file, transform_path
 import fastai
 from fastai.vision import *
+from tqdm import tqdm
 
 class Model:
 
@@ -53,7 +54,10 @@ class Model:
 
     def GetDataWithAudio2Image(self, audio_dir, img_dir):
         fnames = os.listdir(str(audio_dir))
-        transform_path(audio_dir, img_dir, self.log_mel_spec_tfm, fnames=fnames, delete=False)
+        if(len(os.listdir(str(img_dir))) > 2):
+            print('img_dir is not empty, so skip transform audio to image.')
+        else:
+            transform_path(audio_dir, img_dir, self.log_mel_spec_tfm, fnames=fnames, delete=False)
         data = (ImageList.from_folder(img_dir)
                 .split_by_rand_pct(0.2)
                 # .split_by_valid_func(lambda fname: 'nicolas' in str(fname))
@@ -89,28 +93,26 @@ class Model:
         self.data.show_batch(4, figsize=(5, 9), hide_axis=False)
 
     def train(self, read_ckpt=None):
-        print('=== training ===')
-        learn = cnn_learner(self.data, models.resnet18, metrics=accuracy).load(self.model_path + self.model_name)
+        learn = cnn_learner(self.data, models.resnet18, metrics=accuracy) #.load(self.model_path + self.model_name)
+        print('learn.path=', learn.path)
         learn.lr_find()
         learn.recorder.plot()
-        learn.fit_one_cycle(1)
+        learn.fit_one_cycle(12)
         learn.recorder.plot_losses()
         learn.unfreeze()
-        learn.fit_one_cycle(1)
-        learn.save(self.model_path)
-        learn.export(file=self.model_path)
+        learn.fit_one_cycle(12)
+        learn.save(self.model_path + self.model_name)
+        learn.export(file=self.model_path + self.model_name + '.pkl')
         learn.recorder.plot_metrics()
         preds, y, losses = learn.get_preds(with_loss=True)
         interp = ClassificationInterpretation(learn, preds, y, losses)
         #interp = ClassificationInterpretation.from_learner(learn)
         fig = interp.plot_confusion_matrix(figsize=(10, 10), dpi=60, return_fig=True)
         fig.savefig(self.model_path + 'confusion_matrix.jpg', dpi=1000, bbox_inches='tight', return_fig=True)
-        fig = interp.plot_top_losses(9, figsize=(10, 10))
+        fig = interp.plot_top_losses(9, figsize=(10, 10), return_fig=True)
         fig.savefig(self.model_path + 'top_losses.jpg', dpi=1000, bbox_inches='tight')
 
     def test(self):
-
-        self.model_name = 'digital_resnet18'
         if "sr30_resnet18" in self.model_name:
             AUDIO_TEST_DIR = Path(self.root_path + 'AISound\\dataSetForFastaiTest')
             IMG_TEST_DIR = Path(self.root_path + 'sr\\imgForSr30Test')
@@ -118,11 +120,28 @@ class Model:
             AUDIO_TEST_DIR = Path(self.root_path + 'AISound\\free-spoken-digit-dataset-master\\recordings')
             IMG_TEST_DIR = Path(self.root_path + 'sr\\imgs1')
         testdata = self.GetDataWithAudio2Image(AUDIO_TEST_DIR, IMG_TEST_DIR)
-        learn = load_learner(self.model_path)
-        learn.predict(testdata)
-        preds, y, losses = learn.get_preds(with_loss=True)
+        print('testdata=', testdata)
+        learn = load_learner(path=self.model_path, file=self.model_name + '.pkl')
+        print('learn.path=', learn.path)
+        fnames = tqdm(os.listdir(str(IMG_TEST_DIR)))
+        correct_count = 0.
+
+        for f in fnames:
+            filename = self.root_path + 'sr\\imgForSr30Test\\' + f
+            r1, r2, r3 = learn.predict(open_image(filename))
+            if (str(r1) == f[0:3]):
+                correct_count = correct_count + 1
+            else:
+                print('filename=', filename, ', predict=', r1, ', r2=', r2, ', r3=', r3)
+        print('predict correct=', correct_count, ', total=', len(fnames), ', accuracy=', correct_count/len(fnames))
+        # rr = learn.predict(testdata)
+        #print('r1=',r1,', r2=',r2,', r3=',r3)
+        # preds, y, losses = learn.get_preds(with_loss=True)
+        # print('y=', y)
+        '''
         interp = ClassificationInterpretation(learn, preds, y, losses)
         fig = interp.plot_top_losses(9, figsize=(10, 10), return_fig=True)
         fig.savefig(self.model_path + 'top_losses_test.jpg', dpi=1000, bbox_inches='tight')
         fig = interp.plot_confusion_matrix(figsize=(10, 10), dpi=60, return_fig=True)
         fig.savefig(self.model_path + 'confusion_matrix_test.jpg', dpi=1000, bbox_inches='tight')
+        '''

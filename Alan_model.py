@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-from IPython.display import Audio
+#from IPython.display import Audio
 import librosa
 import librosa.display
 import matplotlib.pyplot as plt
@@ -56,7 +56,7 @@ class Model:
 
     def GetDataWithAudio2Image(self, audio_dir, img_dir):
         fnames = os.listdir(str(audio_dir))
-        if(len(os.listdir(str(img_dir))) > 2):
+        if os.path.isdir(str(img_dir)) and (len(os.listdir(str(img_dir))) > 2):
             print('img_dir is not empty, so skip transform audio to image.')
         else:
             transform_path(audio_dir, img_dir, self.log_mel_spec_tfm, fnames=fnames, delete=False)

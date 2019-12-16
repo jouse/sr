@@ -175,9 +175,9 @@ def copy_file(input_file, output_file):
 
 def wav2spec(y, window_size, forward_backward_frame=0, model=None):
 
-    if len(y)<100*0.032*16000:
-        y_tmp = np.zeros([int(100*0.032*16000)])
-        y_tmp[int(100*0.032*16000)-len(y):] = y
+    if len(y)<50*0.032*16000:
+        y_tmp = np.zeros([int(50*0.032*16000)])
+        y_tmp[int(50*0.032*16000)-len(y):] = y
         y = y_tmp
 
     y_mfcc = librosa.feature.mfcc( y=y, sr=16000, n_mfcc=40, n_fft=512, hop_length=256 )
@@ -203,8 +203,8 @@ def wav2spec(y, window_size, forward_backward_frame=0, model=None):
         return Sxx_r.T.reshape( [feature_dim, frames, 1] )
     elif model == 'RNN':
         Sxx_r = Sxx.T  # shape = (frames, 257)
-        frame_start_index = np.random.randint( 0, len( Sxx_r ) - 100 )
-        frame_end_index = frame_start_index + 100
+        frame_start_index = np.random.randint( 0, len( Sxx_r ) - 50 )
+        frame_end_index = frame_start_index + 50
         Sxx_r = Sxx_r[frame_start_index:frame_end_index]
         return Sxx_r
     elif forward_backward_frame:

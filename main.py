@@ -1,7 +1,7 @@
 import tensorflow as tf
 import numpy as np
 
-from Alan_model import Model
+from RNN_model_Una import Model
 from os.path import join
 from utils import search_wav
 from sklearn.cross_validation import train_test_split
@@ -17,7 +17,7 @@ def main():
     # ===========================================================
     print('--- Build Model ---')
     note = 'verification'
-    date = 'RNN30'
+    date = '1213_2'
     gpu_index = '0'
     log_path = '.\\logs\\'
     saver_dir = '.\\model\\'

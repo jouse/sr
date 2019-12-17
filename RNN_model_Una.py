@@ -104,9 +104,9 @@ class Model:
 
             with tf.variable_scope( 'RNN' ):
                 layer_1 = self._add_bidir_lstm( self.x_noisy, self.lstm_neural_number, '1')
-                #bn1 = tf.layers.batch_normalization(layer_1, name='bn1')
+                bn1 = tf.layers.batch_normalization(layer_1, name='bn1')
 
-                outputs = self._add_lstm( layer_1, self.lstm_neural_number, self.output_dimension, '2')
+                outputs = self._add_lstm( bn1, self.lstm_neural_number, self.output_dimension, '2')
                 self.output_layer = tf.reduce_mean(outputs, axis=1)
 
                 #flatten_layer1 = tf.layers.Flatten()(layer_1)
@@ -370,3 +370,4 @@ class Model:
 
             print( 'test total number : {}'.format( len(get_test_list) ) )
             print( 'predict error number : {}'.format( error_count ) )
+            print( 'accuracy rate : {}'.format((len(get_test_list) - error_count) / len(get_test_list) ) )

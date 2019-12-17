@@ -260,7 +260,7 @@ def _gen_training_data_runtime(clean_file_list, noise_file_list, snr_list, label
     y_noise = y_noise - np.mean( y_noise )
     noise_variance = clean_pwr / (10 ** (SNR / 10))
     noise = np.sqrt( noise_variance ) * y_noise / np.std( y_noise )
-    y_noisy = y_clean
+    y_noisy = y_clean + noise
     y_noisy = y_noisy / np.max( np.abs( y_noisy ) )
 
     ## turn wav to specturn

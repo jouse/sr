@@ -17,7 +17,7 @@ def main():
     # ===========================================================
     print('--- Build Model ---')
     note = 'verification'
-    date = '1213_2'
+    date = '1213_2_noise'
     gpu_index = '0'
     log_path = '.\\logs\\'
     saver_dir = '.\\model\\'

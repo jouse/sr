@@ -15,17 +15,32 @@ class Model:
     def __init__(self, log_path, saver_path, date, gpu_num, note):
         self.root_path = 'C:\\Project\\Python\\'
         #self.model_name = 'digital_resnet18'
-        #self.model_name = 'sr30_resnet18'
+        # self.model_name = 'sr30_resnet18'
         #self.model_name = 'sr30_resnet34'
-        self.model_name = 'sr30_resnet50'
+        #self.model_name = 'sr30_resnet50'
+        self.model_name = 'sr30_resnet101'
+        # self.model_name = 'sr30_resnet152'
+
         if "digital_resnet18" in self.model_name:
             self.AUDIO_DIR = Path(self.root_path + 'AISound\\free-spoken-digit-dataset-master\\recordings')
             self.IMG_DIR = Path(self.root_path + 'sr\\imgs1')
             self.digit_pattern = r'(\d+)_\w+_\d+.png$'
-        else:
+            self.model = models.resnet18
+        elif "sr30_resnet18" in self.model_name:
+            self.model = models.resnet18
+        elif "sr30_resnet34" in self.model_name:
+            self.model = models.resnet34
+        elif "sr30_resnet50" in self.model_name:
+            self.model = models.resnet50
+        elif "sr30_resnet101" in self.model_name:
+            self.model = models.resnet101
+        elif "sr30_resnet152" in self.model_name:
+            self.model = models.resnet152
+        if 'sr30_' in self.model_name:
             self.AUDIO_DIR = Path(self.root_path + 'AISound\\dataSetForFastai')
             self.IMG_DIR = Path(self.root_path + 'sr\\imgForSr30Train')
             self.digit_pattern = r'([A-Za-z0-9]+)_\w+..png$'
+
         self.model_path = self.root_path + 'sr\\model\\fastai\\' + self.model_name + '\\'
         self.data = []
         os.makedirs(self.model_path, exist_ok=True)
@@ -96,10 +111,11 @@ class Model:
         self.data.show_batch(4, figsize=(5, 9), hide_axis=False)
 
     def train(self, read_ckpt=None):
-        learn = cnn_learner(self.data, models.resnet18, metrics=accuracy) #.load(self.model_path + self.model_name)
+        learn = cnn_learner(self.data, self.model, metrics=accuracy) #.load(self.model_path + self.model_name)
         print('learn.path=', learn.path)
         learn.fit_one_cycle(12)
-        learn.recorder.plot_losses()
+        fig = learn.recorder.plot_losses(9, return_fig=True)
+        fig.savefig(self.model_path + 'record_losses1.jpg', dpi=1000, bbox_inches='tight')
         learn.unfreeze()
         learn.lr_find()
         fig = learn.recorder.plot(return_fig=True)
@@ -107,14 +123,16 @@ class Model:
         learn.fit_one_cycle(12)
         learn.save(self.model_path + self.model_name)
         learn.export(file=self.model_path + self.model_name + '.pkl')
-        learn.recorder.plot_metrics()
+        fig = learn.recorder.plot_metrics(9, return_fig=True)
+        fig.savefig(self.model_path + 'plot_metrics1.jpg', dpi=1000, bbox_inches='tight')
+        #learn.recorder.plot_metrics()
         preds, y, losses = learn.get_preds(with_loss=True)
         interp = ClassificationInterpretation(learn, preds, y, losses)
         #interp = ClassificationInterpretation.from_learner(learn)
         fig = interp.plot_confusion_matrix(figsize=(10, 10), dpi=60, return_fig=True)
         fig.savefig(self.model_path + 'confusion_matrix.jpg', dpi=1000, bbox_inches='tight')
         fig = interp.plot_top_losses(9, figsize=(10, 10), return_fig=True)
-        fig.savefig(self.model_path + 'top_losses.jpg', dpi=1000, bbox_inches='tight')
+        fig.savefig(self.model_path + 'top_losses2.jpg', dpi=1000, bbox_inches='tight')
 
     def test(self):
         if "digital_resnet18" in self.model_name:

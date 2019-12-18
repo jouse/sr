@@ -1,7 +1,7 @@
 import tensorflow as tf
 import numpy as np
 
-from RNN_model_Una import Model
+from Alan_model import Model
 from os.path import join
 from utils import search_wav
 from sklearn.cross_validation import train_test_split
